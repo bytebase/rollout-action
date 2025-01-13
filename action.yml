@@ -1,0 +1,22 @@
+name: 'Wait rollout to finish'
+description: 'Wait a rollout on Bytebase to finish. Run tasks if needed.'
+
+branding:
+  icon: 'database'
+  color: 'red'
+
+inputs:
+  url:
+    description: The bytebase URL.
+    required: true
+  token:
+    description: The Bytebase access token.
+    required: true
+  rollout:
+    description:
+      'The rollout to wait. Format: projects/{project}/rollouts/{rollout}'
+    required: true
+
+runs:
+  using: node20
+  main: dist/index.js
