@@ -17,6 +17,7 @@ jobs:
       BYTEBASE_URL: 'https://demo.bytebase.com'
       BYTEBASE_PROJECT: 'projects/example'
       BYTEBASE_SERVICE_ACCOUNT: 'demo@service.bytebase.com'
+      BYTEBASE_TARGETS: 'instances/mysql1/databases/db1,instances/mysql1/databases/db2'
     name: Bytebase cicd
     steps:
       - name: Checkout
@@ -44,6 +45,7 @@ jobs:
           token: ${{ steps.login.outputs.token }}
           project: ${{ env.BYTEBASE_PROJECT }}
           release: ${{ steps.create_release.outputs.release }}
+          targets: ${{ env.BYTEBASE_TARGETS }}
       - name: Create rollout
         id: create_rollout
         uses: bytebase/actions-create-rollout@main
