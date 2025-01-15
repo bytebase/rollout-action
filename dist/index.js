@@ -25686,6 +25686,11 @@ async function run() {
         const url = core.getInput('url', { required: true });
         const token = core.getInput('token', { required: true });
         const rolloutName = core.getInput('rollout', { required: true });
+        const m = rolloutName.match(/(?<project>projects\/.*)\/rollouts\/.*/);
+        if (!m || !m.groups || !m.groups['project']) {
+            throw new Error(`failed to extract project from rollout ${rolloutName}`);
+        }
+        const project = m.groups['project'];
         const c = {
             url: url,
             c: new hc.HttpClient('actions-wait-rollout', [], {
@@ -25694,27 +25699,41 @@ async function run() {
                 }
             })
         };
-        await waitRollout(c, rolloutName);
+        const rollout = await getRollout(c, rolloutName);
+        const planName = rollout.plan;
+        if (!planName) {
+            core.debug(`rollout: ${JSON.stringify(rollout)}`);
+            throw new Error(`failed to get rollout.plan`);
+        }
+        // Preview the rollout.
+        // The rollout may have no stages. We need to create stages as we are moving through the pipeline.
+        const rolloutPreview = await createRollout(c, project, planName, true, undefined);
+        rolloutPreview.plan = planName;
+        await waitRollout(c, project, rolloutPreview, rolloutName);
     }
     catch (error) {
         if (error instanceof Error)
             core.setFailed(error.message);
     }
 }
-async function waitRollout(c, rolloutName) {
-    const r = await getRollout(c, rolloutName);
-    const stageCount = r.stages.length;
+async function waitRollout(c, project, rolloutPreview, rolloutName) {
+    const stageCount = rolloutPreview.stages.length;
     if (stageCount === 0) {
         return;
     }
     core.info(`The rollout has ${stageCount} stages:`);
-    core.info(r.stages.map((e) => e.title).join('\n'));
+    core.info(rolloutPreview.stages.map((e) => e.title).join('\n'));
     let i = 0;
     while (true) {
         if (i >= stageCount) {
             break;
         }
-        const r = await getRollout(c, rolloutName);
+        let r = await getRollout(c, rolloutName);
+        // The stage is not created yet.
+        // We need to create it.
+        if (r.stages.length <= i) {
+            r = await createRollout(c, project, rolloutPreview.plan, false, rolloutPreview.stages[i].id);
+        }
         const stage = r.stages[i];
         const { done, failedTasks } = getStageStatus(stage);
         if (done) {
@@ -25737,6 +25756,30 @@ async function getRollout(c, rollout) {
     }
     if (!response.result) {
         throw new Error(`rollout not found`);
+    }
+    return response.result;
+}
+async function createRollout(c, project, plan, validateOnly, stageId) {
+    const params = [];
+    if (validateOnly) {
+        params.push('validateOnly=true');
+    }
+    if (stageId) {
+        params.push(`stageId=${stageId}`);
+    }
+    let url = `${c.url}/v1/${project}/rollouts`;
+    if (params.length > 0) {
+        url = url + '?' + params.join('&');
+    }
+    const request = {
+        plan: plan
+    };
+    const response = await c.c.postJson(url, request);
+    if (response.statusCode !== 200) {
+        throw new Error(`failed to create release, ${response.statusCode}, ${response.result?.message}`);
+    }
+    if (!response.result) {
+        throw new Error(`expect result to be not null, get ${response.result}`);
     }
     return response.result;
 }
