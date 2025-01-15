@@ -9,12 +9,12 @@ export async function run(): Promise<void> {
   try {
     const url = core.getInput('url', { required: true })
     const token = core.getInput('token', { required: true })
-    const rolloutName = core.getInput('rollout', { required: true })
+    const planName = core.getInput('plan', { required: true })
     const targetStage = core.getInput('target-stage')
 
-    const m = rolloutName.match(/(?<project>projects\/.*)\/rollouts\/.*/)
+    const m = planName.match(/(?<project>projects\/.*)\/plans\/.*/)
     if (!m || !m.groups || !m.groups['project']) {
-      throw new Error(`failed to extract project from rollout ${rolloutName}`)
+      throw new Error(`failed to extract project from plan ${planName}`)
     }
     const project = m.groups['project']
 
@@ -25,13 +25,6 @@ export async function run(): Promise<void> {
           authorization: `Bearer ${token}`
         }
       })
-    }
-
-    const rollout = await getRollout(c, rolloutName)
-    const planName = rollout.plan as string
-    if (!planName) {
-      core.debug(`rollout: ${JSON.stringify(rollout)}`)
-      throw new Error(`failed to get rollout.plan`)
     }
 
     // Preview the rollout.
@@ -45,7 +38,10 @@ export async function run(): Promise<void> {
     )
     rolloutPreview.plan = planName
 
-    await waitRollout(c, project, rolloutPreview, rolloutName, targetStage)
+    // Create the rollout without any stage to obtain the rollout resource name.
+    const rollout = await createRollout(c, project, planName, false, '')
+
+    await waitRollout(c, project, rolloutPreview, rollout.name, targetStage)
   } catch (error) {
     if (error instanceof Error) core.setFailed(error.message)
   }

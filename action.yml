@@ -12,9 +12,10 @@ inputs:
   token:
     description: The Bytebase access token.
     required: true
-  rollout:
+  plan:
     description:
-      'The rollout to wait. Format: projects/{project}/rollouts/{rollout}'
+      'The plan to create the rollout from. Format:
+      projects/{project}/plans/{plan}'
     required: true
   target-stage:
     description: >
