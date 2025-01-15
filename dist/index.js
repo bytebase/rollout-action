@@ -25686,6 +25686,7 @@ async function run() {
         const url = core.getInput('url', { required: true });
         const token = core.getInput('token', { required: true });
         const rolloutName = core.getInput('rollout', { required: true });
+        const targetStage = core.getInput('target-stage');
         const m = rolloutName.match(/(?<project>projects\/.*)\/rollouts\/.*/);
         if (!m || !m.groups || !m.groups['project']) {
             throw new Error(`failed to extract project from rollout ${rolloutName}`);
@@ -25709,17 +25710,23 @@ async function run() {
         // The rollout may have no stages. We need to create stages as we are moving through the pipeline.
         const rolloutPreview = await createRollout(c, project, planName, true, undefined);
         rolloutPreview.plan = planName;
-        await waitRollout(c, project, rolloutPreview, rolloutName);
+        await waitRollout(c, project, rolloutPreview, rolloutName, targetStage);
     }
     catch (error) {
         if (error instanceof Error)
             core.setFailed(error.message);
     }
 }
-async function waitRollout(c, project, rolloutPreview, rolloutName) {
+async function waitRollout(c, project, rolloutPreview, rolloutName, targetStage) {
     const stageCount = rolloutPreview.stages.length;
     if (stageCount === 0) {
         return;
+    }
+    if (targetStage !== '') {
+        core.info(`Exit after the stage '${targetStage}' is completed`);
+    }
+    else {
+        core.info('Exit after all stages are completed');
     }
     core.info(`The rollout has ${stageCount} stages:`);
     core.info(rolloutPreview.stages.map((e) => e.title).join('\n'));
@@ -25738,6 +25745,9 @@ async function waitRollout(c, project, rolloutPreview, rolloutName) {
         const { done, failedTasks } = getStageStatus(stage);
         if (done) {
             core.info(`${stage.title} done`);
+            if (stage.title === targetStage) {
+                return;
+            }
             i++;
             continue;
         }

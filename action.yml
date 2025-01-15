@@ -16,6 +16,12 @@ inputs:
     description:
       'The rollout to wait. Format: projects/{project}/rollouts/{rollout}'
     required: true
+  target-stage:
+    description: >
+      Bytebase rollout pipeline can contain multiple stages. This action will
+      exit after complete deploying the `target-stage` stage. `target-stage` is
+      the stage title in the deployment config in the project setting. Example:
+      `Test Stage`
 
 runs:
   using: node20
