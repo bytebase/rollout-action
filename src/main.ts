@@ -41,6 +41,8 @@ export async function run(): Promise<void> {
     // Create the rollout without any stage to obtain the rollout resource name.
     const rollout = await createRollout(c, project, planName, false, '')
 
+    core.info(`Rollout created. View at ${c.url}/${rollout.name} on Bytebase.`)
+
     await waitRollout(c, project, rolloutPreview, rollout.name, targetStage)
   } catch (error) {
     if (error instanceof Error) core.setFailed(error.message)
