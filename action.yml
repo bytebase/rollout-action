@@ -1,5 +1,5 @@
-name: 'Wait rollout to finish'
-description: 'Wait a rollout on Bytebase to finish. Run tasks if needed.'
+name: 'Roll out'
+description: 'Roll out on Bytebase.'
 
 branding:
   icon: 'database'
