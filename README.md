@@ -1,6 +1,6 @@
 # About
 
-Github action to wait rollout on Bytebase.
+Github action to roll out on Bytebase.
 
 ## Example
 
@@ -46,9 +46,9 @@ jobs:
           project: ${{ env.BYTEBASE_PROJECT }}
           release: ${{ steps.create_release.outputs.release }}
           targets: ${{ env.BYTEBASE_TARGETS }}
-      - name: Wait rollout to finish
-        id: wait_rollout
-        uses: bytebase/actions-wait-rollout@main
+      - name: roll out
+        id: roll_out
+        uses: bytebase/actions-roll-out@main
         with:
           url: ${{ env.BYTEBASE_URL }}
           token: ${{ steps.login.outputs.token }}
