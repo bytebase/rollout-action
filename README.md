@@ -1,6 +1,6 @@
 # About
 
-Github action to roll out on Bytebase.
+Github action to rollout on Bytebase.
 
 ## Example
 
@@ -46,9 +46,9 @@ jobs:
           project: ${{ env.BYTEBASE_PROJECT }}
           release: ${{ steps.create_release.outputs.release }}
           targets: ${{ env.BYTEBASE_TARGETS }}
-      - name: roll out
-        id: roll_out
-        uses: bytebase/actions-roll-out@main
+      - name: rollout
+        id: rollout
+        uses: bytebase/actions-rollout@main
         with:
           url: ${{ env.BYTEBASE_URL }}
           token: ${{ steps.login.outputs.token }}

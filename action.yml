@@ -1,5 +1,5 @@
-name: 'Roll out'
-description: 'Roll out on Bytebase.'
+name: 'Rollout'
+description: 'Rollout on Bytebase.'
 
 branding:
   icon: 'database'
