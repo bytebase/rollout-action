@@ -1,6 +1,6 @@
 {
-  "name": "actions-create-release",
-  "description": "GitHub Action to create a release on Bytebase",
+  "name": "actions-rollout",
+  "description": "GitHub Action to rollout on Bytebase",
   "version": "0.0.0",
   "exports": {
     ".": "./dist/index.js"
