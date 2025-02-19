@@ -138,7 +138,7 @@ async function createRollout(
   if (validateOnly) {
     params.push('validateOnly=true')
   }
-  if (stageId) {
+  if (stageId !== undefined) {
     params.push(`stageId=${stageId}`)
   }
   let url = `${c.url}/v1/${project}/rollouts`
