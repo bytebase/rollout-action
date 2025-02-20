@@ -1,6 +1,8 @@
 # About
 
 Github action to rollout on Bytebase.
+  - Tutorial: [Database Release CI/CD with GitHub Actions](http://bytebase.com/docs/tutorials/github-release-cicd-workflow/)
+  - Sample repo: https://github.com/bytebase/release-cicd-workflows-example
 
 ## Example
 
