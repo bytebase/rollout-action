@@ -4,6 +4,15 @@ Github action to rollout on Bytebase.
   - Tutorial: [Database Release CI/CD with GitHub Actions](http://bytebase.com/docs/tutorials/github-release-cicd-workflow/)
   - Sample repo: https://github.com/bytebase/release-cicd-workflows-example
 
+## Inputs
+
+| Input Name | Description | Required | Default |
+|---|---|---|---|
+| `url` | The bytebase URL. | Yes |  |
+| `token` | The Bytebase access token. | Yes |  |
+| `plan` | The plan to create the rollout from. Format: `projects/{project}/plans/{plan}` | Yes |  |
+| `target-stage` | Bytebase rollout pipeline can contain multiple stages. This action will exit after complete deploying the `target-stage` stage. `target-stage` is the stage title in the deployment config in the project setting. If not provided, this action will rollout all stages. Example: `Test Stage` | No |  |
+
 ## Example
 
 ```yaml
