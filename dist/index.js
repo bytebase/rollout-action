@@ -25818,7 +25818,7 @@ async function runStageTasks(c, stage) {
     catch (e) {
         const err = e;
         if (err.message.includes('cannot create pending task runs because there are pending/running/done task runs')) {
-            core.info(`encounter retriable ${err.message}, will retry`);
+            core.info(`encounter retryable error: ${err.message}, will retry`);
         }
         else {
             throw e;

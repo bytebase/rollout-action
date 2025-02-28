@@ -204,7 +204,7 @@ async function runStageTasks(c: httpClient, stage: any) {
         'cannot create pending task runs because there are pending/running/done task runs'
       )
     ) {
-      core.info(`encounter retriable ${err.message}, will retry`)
+      core.info(`encounter retryable error: ${err.message}, will retry`)
     } else {
       throw e
     }
