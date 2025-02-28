@@ -25694,7 +25694,7 @@ async function run() {
         const project = m.groups['project'];
         const c = {
             url: url,
-            c: new hc.HttpClient('actions-wait-rollout', [], {
+            c: new hc.HttpClient('rollout-action', [], {
                 headers: {
                     authorization: `Bearer ${token}`
                 }
@@ -25809,9 +25809,20 @@ async function runStageTasks(c, stage) {
         tasks: taskNames,
         reason: `run ${stage.title}`
     };
-    const response = await c.c.postJson(url, request);
-    if (response.statusCode !== 200) {
-        throw new Error(`failed to run tasks, ${response.statusCode}, ${response.result.message}`);
+    try {
+        const response = await c.c.postJson(url, request);
+        if (response.statusCode !== 200) {
+            throw new Error(`failed to run tasks, ${response.statusCode}, ${response.result.message}`);
+        }
+    }
+    catch (e) {
+        const err = e;
+        if (err.message.includes('cannot create pending task runs because there are pending/running/done task runs')) {
+            core.info(`encounter retriable ${err.message}, will retry`);
+        }
+        else {
+            throw e;
+        }
     }
 }
 async function sleep(ms) {

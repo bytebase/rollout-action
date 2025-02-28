@@ -20,7 +20,7 @@ export async function run(): Promise<void> {
 
     const c: httpClient = {
       url: url,
-      c: new hc.HttpClient('actions-wait-rollout', [], {
+      c: new hc.HttpClient('rollout-action', [], {
         headers: {
           authorization: `Bearer ${token}`
         }
@@ -189,12 +189,25 @@ async function runStageTasks(c: httpClient, stage: any) {
     tasks: taskNames,
     reason: `run ${stage.title}`
   }
-  const response = await c.c.postJson<any>(url, request)
 
-  if (response.statusCode !== 200) {
-    throw new Error(
-      `failed to run tasks, ${response.statusCode}, ${response.result.message}`
-    )
+  try {
+    const response = await c.c.postJson<any>(url, request)
+    if (response.statusCode !== 200) {
+      throw new Error(
+        `failed to run tasks, ${response.statusCode}, ${response.result.message}`
+      )
+    }
+  } catch (e: any) {
+    const err = e as hc.HttpClientError
+    if (
+      err.message.includes(
+        'cannot create pending task runs because there are pending/running/done task runs'
+      )
+    ) {
+      core.info(`encounter retriable ${err.message}, will retry`)
+    } else {
+      throw e
+    }
   }
 }
 
