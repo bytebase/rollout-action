@@ -80,7 +80,7 @@ async function waitRollout(
     let r = await getRollout(c, rolloutName)
     // The stage is not created yet.
     // We need to create it.
-    if (r.stages.length <= i) {
+    if ((r.stages?.length ?? 0) <= i) {
       r = await createRollout(
         c,
         project,
