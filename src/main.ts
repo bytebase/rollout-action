@@ -68,7 +68,9 @@ async function waitRollout(
   }
   core.info(`The rollout has ${stageCount} stages:`)
   core.info(
-    rolloutPreview.stages.map((e: { title: string }) => e.title).join('\n')
+    rolloutPreview.stages
+      .map((e: { environment: string }) => e.environment)
+      .join('\n')
   )
 
   let i = 0
@@ -92,8 +94,12 @@ async function waitRollout(
     const stage = r.stages[i]
     const { done, failedTasks } = getStageStatus(stage)
     if (done) {
-      core.info(`${stage.title} done`)
+      core.info(`${stage.environment} done`)
       if (stage.title === targetStage) {
+        // stage.title is deprecated, but kept for compatibility
+        return
+      }
+      if (stage.environment === targetStage) {
         return
       }
       i++
@@ -139,7 +145,8 @@ async function createRollout(
     params.push('validateOnly=true')
   }
   if (stageId !== undefined) {
-    params.push(`stageId=${stageId}`)
+    params.push(`stageId=${stageId}`) // deprecated, but kept for compatibility
+    params.push(`target=${stageId}`)
   }
   let url = `${c.url}/v1/${project}/rollouts`
   if (params.length > 0) {
@@ -169,7 +176,9 @@ async function createRollout(
 
 function getStageStatus(stage: any) {
   return {
-    done: stage.tasks.every((e: { status: string }) => e.status === 'DONE'),
+    done: stage.tasks.every(
+      (e: { status: string }) => e.status === 'DONE' || e.status === 'SKIPPED'
+    ),
     failedTasks: stage.tasks.filter(
       (e: { status: string }) => e.status === 'FAILED'
     )
@@ -187,7 +196,7 @@ async function runStageTasks(c: httpClient, stage: any) {
   const url = `${c.url}/v1/${stageName}/tasks:batchRun`
   const request = {
     tasks: taskNames,
-    reason: `run ${stage.title}`
+    reason: `run ${stage.environment}`
   }
 
   try {

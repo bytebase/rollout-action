@@ -25726,7 +25726,9 @@ async function waitRollout(c, project, rolloutPreview, rolloutName, targetStage)
         core.info('Exit after all stages are completed');
     }
     core.info(`The rollout has ${stageCount} stages:`);
-    core.info(rolloutPreview.stages.map((e) => e.title).join('\n'));
+    core.info(rolloutPreview.stages
+        .map((e) => e.environment)
+        .join('\n'));
     let i = 0;
     while (true) {
         if (i >= stageCount) {
@@ -25741,8 +25743,12 @@ async function waitRollout(c, project, rolloutPreview, rolloutName, targetStage)
         const stage = r.stages[i];
         const { done, failedTasks } = getStageStatus(stage);
         if (done) {
-            core.info(`${stage.title} done`);
+            core.info(`${stage.environment} done`);
             if (stage.title === targetStage) {
+                // stage.title is deprecated, but kept for compatibility
+                return;
+            }
+            if (stage.environment === targetStage) {
                 return;
             }
             i++;
@@ -25772,7 +25778,8 @@ async function createRollout(c, project, plan, validateOnly, stageId) {
         params.push('validateOnly=true');
     }
     if (stageId !== undefined) {
-        params.push(`stageId=${stageId}`);
+        params.push(`stageId=${stageId}`); // deprecated, but kept for compatibility
+        params.push(`target=${stageId}`);
     }
     let url = `${c.url}/v1/${project}/rollouts`;
     if (params.length > 0) {
@@ -25792,7 +25799,7 @@ async function createRollout(c, project, plan, validateOnly, stageId) {
 }
 function getStageStatus(stage) {
     return {
-        done: stage.tasks.every((e) => e.status === 'DONE'),
+        done: stage.tasks.every((e) => e.status === 'DONE' || e.status === 'SKIPPED'),
         failedTasks: stage.tasks.filter((e) => e.status === 'FAILED')
     };
 }
@@ -25807,7 +25814,7 @@ async function runStageTasks(c, stage) {
     const url = `${c.url}/v1/${stageName}/tasks:batchRun`;
     const request = {
         tasks: taskNames,
-        reason: `run ${stage.title}`
+        reason: `run ${stage.environment}`
     };
     try {
         const response = await c.c.postJson(url, request);
