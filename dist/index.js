@@ -25738,7 +25738,8 @@ async function waitRollout(c, project, rolloutPreview, rolloutName, targetStage)
         // The stage is not created yet.
         // We need to create it.
         if ((r.stages?.length ?? 0) <= i) {
-            r = await createRollout(c, project, rolloutPreview.plan, false, rolloutPreview.stages[i].id);
+            r = await createRollout(c, project, rolloutPreview.plan, false, rolloutPreview.stages[i].id ?? rolloutPreview.stages[i].environment // stage.id is deprecated, but kept for compatibility
+            );
         }
         const stage = r.stages[i];
         const { done, failedTasks } = getStageStatus(stage);
@@ -25779,7 +25780,7 @@ async function createRollout(c, project, plan, validateOnly, stageId) {
     }
     if (stageId !== undefined) {
         params.push(`stageId=${stageId}`); // deprecated, but kept for compatibility
-        params.push(`target=${stageId}`);
+        params.push(`target=environments/${stageId}`);
     }
     let url = `${c.url}/v1/${project}/rollouts`;
     if (params.length > 0) {

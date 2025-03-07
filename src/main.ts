@@ -88,7 +88,7 @@ async function waitRollout(
         project,
         rolloutPreview.plan,
         false,
-        rolloutPreview.stages[i].id
+        rolloutPreview.stages[i].id ?? rolloutPreview.stages[i].environment // stage.id is deprecated, but kept for compatibility
       )
     }
     const stage = r.stages[i]
@@ -146,7 +146,7 @@ async function createRollout(
   }
   if (stageId !== undefined) {
     params.push(`stageId=${stageId}`) // deprecated, but kept for compatibility
-    params.push(`target=${stageId}`)
+    params.push(`target=environments/${stageId}`)
   }
   let url = `${c.url}/v1/${project}/rollouts`
   if (params.length > 0) {
