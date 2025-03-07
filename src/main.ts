@@ -145,6 +145,9 @@ async function createRollout(
     params.push('validateOnly=true')
   }
   if (stageId !== undefined) {
+    if (stageId.startsWith('environments/')) {
+      stageId = stageId.substring('environments/'.length)
+    }
     params.push(`stageId=${stageId}`) // deprecated, but kept for compatibility
     params.push(`target=environments/${stageId}`)
   }
