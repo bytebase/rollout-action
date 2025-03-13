@@ -1,5 +1,8 @@
 import * as core from '@actions/core'
 import * as hc from '@actions/http-client'
+import { gte } from 'semver'
+
+const minimumBytebaseVersion = '3.5.0'
 
 /**
  * The main function for the action.
@@ -10,7 +13,11 @@ export async function run(): Promise<void> {
     const url = core.getInput('url', { required: true })
     const token = core.getInput('token', { required: true })
     const planName = core.getInput('plan', { required: true })
-    const targetStage = core.getInput('target-stage')
+    const targetStage = core.getInput('target-stage', { required: true })
+
+    if (targetStage === '') {
+      throw new Error('target stage cannot be empty')
+    }
 
     const m = planName.match(/(?<project>projects\/.*)\/plans\/.*/)
     if (!m || !m.groups || !m.groups['project']) {
@@ -27,6 +34,8 @@ export async function run(): Promise<void> {
       })
     }
 
+    assertBytebaseVersion(c)
+
     // Preview the rollout.
     // The rollout may have no stages. We need to create stages as we are moving through the pipeline.
     const rolloutPreview = await createRollout(
@@ -37,6 +46,18 @@ export async function run(): Promise<void> {
       undefined
     )
     rolloutPreview.plan = planName
+
+    if (
+      !rolloutPreview.stages.some(
+        (e: { environment: string }) => e.environment === targetStage
+      )
+    ) {
+      throw new Error(`target stage ${targetStage} not found
+available stages:
+${rolloutPreview.stages
+  .map((e: { environment: string }) => e.environment)
+  .join('\n')}`)
+    }
 
     // Create the rollout without any stage to obtain the rollout resource name.
     const rollout = await createRollout(c, project, planName, false, '')
@@ -60,12 +81,7 @@ async function waitRollout(
   if (stageCount === 0) {
     return
   }
-
-  if (targetStage !== '') {
-    core.info(`Exit after the stage '${targetStage}' is completed`)
-  } else {
-    core.info('Exit after all stages are completed')
-  }
+  core.info(`Exit after the stage '${targetStage}' is completed`)
   core.info(`The rollout has ${stageCount} stages:`)
   core.info(
     rolloutPreview.stages
@@ -88,17 +104,13 @@ async function waitRollout(
         project,
         rolloutPreview.plan,
         false,
-        rolloutPreview.stages[i].id ?? rolloutPreview.stages[i].environment // stage.id is deprecated, but kept for compatibility
+        rolloutPreview.stages[i].environment
       )
     }
     const stage = r.stages[i]
     const { done, failedTasks } = getStageStatus(stage)
     if (done) {
       core.info(`${stage.environment} done`)
-      if (stage.title === targetStage) {
-        // stage.title is deprecated, but kept for compatibility
-        return
-      }
       if (stage.environment === targetStage) {
         return
       }
@@ -138,18 +150,14 @@ async function createRollout(
   project: string,
   plan: string,
   validateOnly: boolean,
-  stageId: string | undefined
+  targetStage: string | undefined
 ): Promise<any> {
   const params: string[] = []
   if (validateOnly) {
     params.push('validateOnly=true')
   }
-  if (stageId !== undefined) {
-    if (stageId.startsWith('environments/')) {
-      stageId = stageId.substring('environments/'.length)
-    }
-    params.push(`stageId=${stageId}`) // deprecated, but kept for compatibility
-    params.push(`target=environments/${stageId}`)
+  if (targetStage !== undefined) {
+    params.push(`target=${targetStage}`)
   }
   let url = `${c.url}/v1/${project}/rollouts`
   if (params.length > 0) {
@@ -220,6 +228,26 @@ async function runStageTasks(c: httpClient, stage: any) {
     } else {
       throw e
     }
+  }
+}
+
+async function assertBytebaseVersion(c: httpClient) {
+  const response = await c.c.getJson<{ version: string }>(
+    `${c.url}/v1/actuator/info`
+  )
+  if (response.statusCode !== 200) {
+    throw new Error(
+      `failed to get actuator info, status code: ${response.statusCode}`
+    )
+  }
+  if (!response.result) {
+    throw new Error(`actuator info not found`)
+  }
+
+  if (!gte(response.result.version, minimumBytebaseVersion)) {
+    throw new Error(
+      `Bytebase version ${response.result.version} is not supported. Please upgrade to ${minimumBytebaseVersion} or later.`
+    )
   }
 }
 

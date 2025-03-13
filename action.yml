@@ -21,7 +21,9 @@ inputs:
     description: >
       Bytebase rollout pipeline can contain multiple stages. This action will
       exit after complete deploying the `target-stage` stage. `target-stage` is
-      the stage environment. Example: `prod`
+      the stage environment. Example: `environments/prod`. Fail if there is no
+      matching stage.
+    required: true
 
 runs:
   using: node20

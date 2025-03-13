@@ -8,12 +8,12 @@ Github action to rollout on Bytebase.
 
 ## Inputs
 
-| Input Name     | Description                                                                                                                                                                                                                                    | Required | Default |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------- |
-| `url`          | The bytebase URL.                                                                                                                                                                                                                              | Yes      |         |
-| `token`        | The Bytebase access token.                                                                                                                                                                                                                     | Yes      |         |
-| `plan`         | The plan to create the rollout from. Format: `projects/{project}/plans/{plan}`                                                                                                                                                                 | Yes      |         |
-| `target-stage` | Bytebase rollout pipeline can contain multiple stages. This action will exit after complete deploying the `target-stage` stage. `target-stage` is the stage environment. If not provided, this action will rollout all stages. Example: `prod` | No       |         |
+| Input Name     | Description                                                                                                                                                                                                                                | Required | Default |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------- | ------- |
+| `url`          | The bytebase URL.                                                                                                                                                                                                                          | Yes      |         |
+| `token`        | The Bytebase access token.                                                                                                                                                                                                                 | Yes      |         |
+| `plan`         | The plan to create the rollout from. Format: `projects/{project}/plans/{plan}`                                                                                                                                                             | Yes      |         |
+| `target-stage` | Bytebase rollout pipeline can contain multiple stages. This action will exit after complete deploying the `target-stage` stage. `target-stage` is the stage environment. Example: `environments/prod`. Fail if there is no matching stage. | Yes      |         |
 
 ## Example
 
@@ -66,4 +66,5 @@ jobs:
           url: ${{ env.BYTEBASE_URL }}
           token: ${{ steps.login.outputs.token }}
           plan: ${{ steps.create_plan.outputs.plan }}
+          target-stage: prod
 ```
