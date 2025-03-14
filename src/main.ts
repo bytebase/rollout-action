@@ -1,8 +1,26 @@
 import * as core from '@actions/core'
 import * as hc from '@actions/http-client'
 import { gte } from 'semver'
+import { sleep } from './utils'
 
 const minimumBytebaseVersion = '3.5.0'
+
+// Action parameters.
+const bbUrl = core.getInput('url', { required: true })
+const token = core.getInput('token', { required: true })
+const planName = core.getInput('plan', { required: true })
+const targetStage = core.getInput('target-stage', { required: true })
+
+// The common HTTP client for the action.
+const c = new hc.HttpClient('rollout-action', [], {
+  headers: {
+    authorization: `Bearer ${token}`
+  }
+})
+
+// The created rollout name in this action.
+// Using to cancel the rollout when the action is cancelled.
+let createdRollout: string | undefined = undefined
 
 /**
  * The main function for the action.
@@ -10,11 +28,6 @@ const minimumBytebaseVersion = '3.5.0'
  */
 export async function run(): Promise<void> {
   try {
-    const url = core.getInput('url', { required: true })
-    const token = core.getInput('token', { required: true })
-    const planName = core.getInput('plan', { required: true })
-    const targetStage = core.getInput('target-stage', { required: true })
-
     if (targetStage === '') {
       throw new Error('target stage cannot be empty')
     }
@@ -24,15 +37,6 @@ export async function run(): Promise<void> {
       throw new Error(`failed to extract project from plan ${planName}`)
     }
     const project = m.groups['project']
-
-    const c: httpClient = {
-      url: url,
-      c: new hc.HttpClient('rollout-action', [], {
-        headers: {
-          authorization: `Bearer ${token}`
-        }
-      })
-    }
 
     assertBytebaseVersion(c)
 
@@ -61,8 +65,10 @@ ${rolloutPreview.stages
 
     // Create the rollout without any stage to obtain the rollout resource name.
     const rollout = await createRollout(c, project, planName, false, '')
+    // Cache created rollout name to cancel it when the action is cancelled.
+    createdRollout = rollout.name
 
-    core.info(`Rollout created. View at ${c.url}/${rollout.name} on Bytebase.`)
+    core.info(`Rollout created. View at ${bbUrl}/${rollout.name} on Bytebase.`)
 
     await waitRollout(c, project, rolloutPreview, rollout.name, targetStage)
   } catch (error) {
@@ -71,7 +77,7 @@ ${rolloutPreview.stages
 }
 
 async function waitRollout(
-  c: httpClient,
+  c: hc.HttpClient,
   project: string,
   rolloutPreview: any,
   rolloutName: string,
@@ -128,9 +134,9 @@ async function waitRollout(
   }
 }
 
-async function getRollout(c: httpClient, rollout: string) {
-  const url = `${c.url}/v1/${rollout}`
-  const response = await c.c.getJson<any>(url)
+async function getRollout(c: hc.HttpClient, rollout: string) {
+  const url = `${bbUrl}/v1/${rollout}`
+  const response = await c.getJson<any>(url)
 
   if (response.statusCode !== 200) {
     throw new Error(
@@ -146,7 +152,7 @@ async function getRollout(c: httpClient, rollout: string) {
 }
 
 async function createRollout(
-  c: httpClient,
+  c: hc.HttpClient,
   project: string,
   plan: string,
   validateOnly: boolean,
@@ -159,7 +165,7 @@ async function createRollout(
   if (targetStage !== undefined) {
     params.push(`target=${targetStage}`)
   }
-  let url = `${c.url}/v1/${project}/rollouts`
+  let url = `${bbUrl}/v1/${project}/rollouts`
   if (params.length > 0) {
     url = url + '?' + params.join('&')
   }
@@ -168,7 +174,7 @@ async function createRollout(
     plan: plan
   }
 
-  const response = await c.c.postJson<{
+  const response = await c.postJson<{
     message: string
   }>(url, request)
 
@@ -196,7 +202,7 @@ function getStageStatus(stage: any) {
   }
 }
 
-async function runStageTasks(c: httpClient, stage: any) {
+async function runStageTasks(c: hc.HttpClient, stage: any) {
   const stageName = stage.name
   const taskNames = stage.tasks
     .filter((e: { status: string }) => e.status === 'NOT_STARTED')
@@ -204,14 +210,14 @@ async function runStageTasks(c: httpClient, stage: any) {
   if (taskNames.length === 0) {
     return
   }
-  const url = `${c.url}/v1/${stageName}/tasks:batchRun`
+  const url = `${bbUrl}/v1/${stageName}/tasks:batchRun`
   const request = {
     tasks: taskNames,
     reason: `run ${stage.environment}`
   }
 
   try {
-    const response = await c.c.postJson<any>(url, request)
+    const response = await c.postJson<any>(url, request)
     if (response.statusCode !== 200) {
       throw new Error(
         `failed to run tasks, ${response.statusCode}, ${response.result.message}`
@@ -231,9 +237,9 @@ async function runStageTasks(c: httpClient, stage: any) {
   }
 }
 
-async function assertBytebaseVersion(c: httpClient) {
-  const response = await c.c.getJson<{ version: string }>(
-    `${c.url}/v1/actuator/info`
+async function assertBytebaseVersion(c: hc.HttpClient) {
+  const response = await c.getJson<{ version: string }>(
+    `${bbUrl}/v1/actuator/info`
   )
   if (response.statusCode !== 200) {
     throw new Error(
@@ -251,10 +257,56 @@ async function assertBytebaseVersion(c: httpClient) {
   }
 }
 
-async function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
+async function cancelRollout(c: hc.HttpClient) {
+  if (!createdRollout) {
+    return
+  }
+
+  const listTaskRunsResponse = await c.getJson<{
+    taskRuns: {
+      name: string
+      status: 'PENDING' | 'RUNNING' | 'DONE' | 'FAILED' | 'CANCELED'
+    }[]
+  }>(`${bbUrl}/v1/${createdRollout}/stages/-/tasks/-/taskRuns`)
+  if (listTaskRunsResponse.statusCode !== 200) {
+    throw new Error(
+      `failed to list task runs, status code: ${listTaskRunsResponse.statusCode}`
+    )
+  }
+  if (!listTaskRunsResponse.result) {
+    throw new Error(`list task runs not found`)
+  }
+  const taskRuns = listTaskRunsResponse.result.taskRuns.filter(
+    t => t.status === 'PENDING' || t.status === 'RUNNING'
+  )
+  if (!Array.isArray(taskRuns) || taskRuns.length === 0) {
+    core.info('no task runs found, nothing to cancel')
+    return
+  }
+
+  core.info(
+    `batch canceling task runs: ${taskRuns.map(t => t.name).join(', ')}`
+  )
+  try {
+    await c.postJson(
+      `${bbUrl}/v1/${createdRollout}/stages/-/tasks/-/taskRuns:batchCancel`,
+      {
+        taskRuns: taskRuns.map(t => t.name)
+      }
+    )
+  } catch (error) {
+    core.warning(`failed to cancel task runs, ${error}, please cancel manually`)
+  }
 }
-interface httpClient {
-  c: hc.HttpClient
-  url: string
-}
+
+process.on('SIGINT', () => {
+  console.log('Cancellation signal (SIGINT) received.')
+  cancelRollout(c)
+  process.exit(0)
+})
+
+process.on('SIGTERM', () => {
+  console.log('Cancellation signal (SIGTERM) received.')
+  cancelRollout(c)
+  process.exit(0)
+})

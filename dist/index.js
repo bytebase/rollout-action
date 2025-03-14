@@ -28238,17 +28238,28 @@ exports.run = run;
 const core = __importStar(__nccwpck_require__(9999));
 const hc = __importStar(__nccwpck_require__(787));
 const semver_1 = __nccwpck_require__(989);
+const utils_1 = __nccwpck_require__(6236);
 const minimumBytebaseVersion = '3.5.0';
+// Action parameters.
+const bbUrl = core.getInput('url', { required: true });
+const token = core.getInput('token', { required: true });
+const planName = core.getInput('plan', { required: true });
+const targetStage = core.getInput('target-stage', { required: true });
+// The common HTTP client for the action.
+const c = new hc.HttpClient('rollout-action', [], {
+    headers: {
+        authorization: `Bearer ${token}`
+    }
+});
+// The created rollout name in this action.
+// Using to cancel the rollout when the action is cancelled.
+let createdRollout = undefined;
 /**
  * The main function for the action.
  * @returns {Promise<void>} Resolves when the action is complete.
  */
 async function run() {
     try {
-        const url = core.getInput('url', { required: true });
-        const token = core.getInput('token', { required: true });
-        const planName = core.getInput('plan', { required: true });
-        const targetStage = core.getInput('target-stage', { required: true });
         if (targetStage === '') {
             throw new Error('target stage cannot be empty');
         }
@@ -28257,14 +28268,6 @@ async function run() {
             throw new Error(`failed to extract project from plan ${planName}`);
         }
         const project = m.groups['project'];
-        const c = {
-            url: url,
-            c: new hc.HttpClient('rollout-action', [], {
-                headers: {
-                    authorization: `Bearer ${token}`
-                }
-            })
-        };
         assertBytebaseVersion(c);
         // Preview the rollout.
         // The rollout may have no stages. We need to create stages as we are moving through the pipeline.
@@ -28279,7 +28282,9 @@ ${rolloutPreview.stages
         }
         // Create the rollout without any stage to obtain the rollout resource name.
         const rollout = await createRollout(c, project, planName, false, '');
-        core.info(`Rollout created. View at ${c.url}/${rollout.name} on Bytebase.`);
+        // Cache created rollout name to cancel it when the action is cancelled.
+        createdRollout = rollout.name;
+        core.info(`Rollout created. View at ${bbUrl}/${rollout.name} on Bytebase.`);
         await waitRollout(c, project, rolloutPreview, rollout.name, targetStage);
     }
     catch (error) {
@@ -28322,12 +28327,12 @@ async function waitRollout(c, project, rolloutPreview, rolloutName, targetStage)
             throw new Error(`task ${failedTasks.map((e) => e.name)} failed`);
         }
         await runStageTasks(c, stage);
-        await sleep(5000);
+        await (0, utils_1.sleep)(5000);
     }
 }
 async function getRollout(c, rollout) {
-    const url = `${c.url}/v1/${rollout}`;
-    const response = await c.c.getJson(url);
+    const url = `${bbUrl}/v1/${rollout}`;
+    const response = await c.getJson(url);
     if (response.statusCode !== 200) {
         throw new Error(`failed to get rollout, ${response.statusCode}, ${response.result.message}`);
     }
@@ -28344,14 +28349,14 @@ async function createRollout(c, project, plan, validateOnly, targetStage) {
     if (targetStage !== undefined) {
         params.push(`target=${targetStage}`);
     }
-    let url = `${c.url}/v1/${project}/rollouts`;
+    let url = `${bbUrl}/v1/${project}/rollouts`;
     if (params.length > 0) {
         url = url + '?' + params.join('&');
     }
     const request = {
         plan: plan
     };
-    const response = await c.c.postJson(url, request);
+    const response = await c.postJson(url, request);
     if (response.statusCode !== 200) {
         throw new Error(`failed to create release, ${response.statusCode}, ${response.result?.message}`);
     }
@@ -28374,13 +28379,13 @@ async function runStageTasks(c, stage) {
     if (taskNames.length === 0) {
         return;
     }
-    const url = `${c.url}/v1/${stageName}/tasks:batchRun`;
+    const url = `${bbUrl}/v1/${stageName}/tasks:batchRun`;
     const request = {
         tasks: taskNames,
         reason: `run ${stage.environment}`
     };
     try {
-        const response = await c.c.postJson(url, request);
+        const response = await c.postJson(url, request);
         if (response.statusCode !== 200) {
             throw new Error(`failed to run tasks, ${response.statusCode}, ${response.result.message}`);
         }
@@ -28396,7 +28401,7 @@ async function runStageTasks(c, stage) {
     }
 }
 async function assertBytebaseVersion(c) {
-    const response = await c.c.getJson(`${c.url}/v1/actuator/info`);
+    const response = await c.getJson(`${bbUrl}/v1/actuator/info`);
     if (response.statusCode !== 200) {
         throw new Error(`failed to get actuator info, status code: ${response.statusCode}`);
     }
@@ -28407,6 +28412,53 @@ async function assertBytebaseVersion(c) {
         throw new Error(`Bytebase version ${response.result.version} is not supported. Please upgrade to ${minimumBytebaseVersion} or later.`);
     }
 }
+async function cancelRollout(c) {
+    if (!createdRollout) {
+        return;
+    }
+    const listTaskRunsResponse = await c.getJson(`${bbUrl}/v1/${createdRollout}/stages/-/tasks/-/taskRuns`);
+    if (listTaskRunsResponse.statusCode !== 200) {
+        throw new Error(`failed to list task runs, status code: ${listTaskRunsResponse.statusCode}`);
+    }
+    if (!listTaskRunsResponse.result) {
+        throw new Error(`list task runs not found`);
+    }
+    const taskRuns = listTaskRunsResponse.result.taskRuns.filter(t => t.status === 'PENDING' || t.status === 'RUNNING');
+    if (!Array.isArray(taskRuns) || taskRuns.length === 0) {
+        core.info('no task runs found, nothing to cancel');
+        return;
+    }
+    core.info(`batch canceling task runs: ${taskRuns.map(t => t.name).join(', ')}`);
+    try {
+        await c.postJson(`${bbUrl}/v1/${createdRollout}/stages/-/tasks/-/taskRuns:batchCancel`, {
+            taskRuns: taskRuns.map(t => t.name)
+        });
+    }
+    catch (error) {
+        core.warning(`failed to cancel task runs, ${error}, please cancel manually`);
+    }
+}
+process.on('SIGINT', () => {
+    console.log('Cancellation signal (SIGINT) received.');
+    cancelRollout(c);
+    process.exit(0);
+});
+process.on('SIGTERM', () => {
+    console.log('Cancellation signal (SIGTERM) received.');
+    cancelRollout(c);
+    process.exit(0);
+});
+
+
+/***/ }),
+
+/***/ 6236:
+/***/ ((__unused_webpack_module, exports) => {
+
+"use strict";
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.sleep = sleep;
 async function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
