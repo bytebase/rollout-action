@@ -28358,7 +28358,7 @@ async function createRollout(c, project, plan, validateOnly, targetStage) {
     };
     const response = await c.postJson(url, request);
     if (response.statusCode !== 200) {
-        throw new Error(`failed to create release, ${response.statusCode}, ${response.result?.message}`);
+        throw new Error(`failed to create rollout, ${response.statusCode}, ${response.result?.message}`);
     }
     if (!response.result) {
         throw new Error(`expect result to be not null, get ${response.result}`);
@@ -28429,23 +28429,37 @@ async function cancelRollout(c) {
         return;
     }
     core.info(`batch canceling task runs: ${taskRuns.map(t => t.name).join(', ')}`);
+    // Format: stages/<stageId>
+    let stageId = '';
+    for (const taskRun of taskRuns) {
+        const m = taskRun.name.match(/(?<stageId>stages\/\d+)/);
+        if (!m || !m.groups || !m.groups['stageId']) {
+            throw new Error(`failed to extract stage id from task run name`);
+        }
+        stageId = m.groups['stageId'];
+    }
+    if (!stageId) {
+        throw new Error(`failed to extract stage id from task run name`);
+    }
     try {
-        await c.postJson(`${bbUrl}/v1/${createdRollout}/stages/-/tasks/-/taskRuns:batchCancel`, {
+        const url = `${bbUrl}/v1/${createdRollout}/${stageId}/tasks/-/taskRuns:batchCancel`;
+        await c.postJson(url, {
             taskRuns: taskRuns.map(t => t.name)
         });
+        core.info(`task runs canceled: ${taskRuns.map(t => t.name).join(', ')}`);
     }
     catch (error) {
         core.warning(`failed to cancel task runs, ${error}, please cancel manually`);
     }
 }
-process.on('SIGINT', () => {
-    console.log('Cancellation signal (SIGINT) received.');
-    cancelRollout(c);
+process.on('SIGINT', async () => {
+    core.warning('Cancellation signal (SIGINT) received.');
+    await cancelRollout(c);
     process.exit(0);
 });
-process.on('SIGTERM', () => {
-    console.log('Cancellation signal (SIGTERM) received.');
-    cancelRollout(c);
+process.on('SIGTERM', async () => {
+    core.warning('Cancellation signal (SIGTERM) received.');
+    await cancelRollout(c);
     process.exit(0);
 });
 
