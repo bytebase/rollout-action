@@ -10,6 +10,7 @@ const bbUrl = core.getInput('url', { required: true })
 const token = core.getInput('token', { required: true })
 const planName = core.getInput('plan', { required: true })
 const targetStage = core.getInput('target-stage', { required: true })
+const rolloutTitle = core.getInput('rollout-title')
 
 // The common HTTP client for the action.
 const c = new hc.HttpClient('rollout-action', [], {
@@ -171,7 +172,8 @@ async function createRollout(
   }
 
   const request = {
-    plan: plan
+    plan: plan,
+    title: rolloutTitle
   }
 
   const response = await c.postJson<{
