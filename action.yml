@@ -18,9 +18,7 @@ inputs:
       projects/{project}/plans/{plan}'
     required: true
   rollout-title:
-    description:
-      'The created rollout title. Example: `${{ github.event.head_commit.message
-      }}`'
+    description: 'The created rollout title.'
   target-stage:
     description: >
       Bytebase rollout pipeline can contain multiple stages. This action will
