@@ -1,3 +1,6 @@
+> [!NOTE]  
+> Please refer to [the new example](https://github.com/bytebase/example-gitops-github-flow).
+
 # About
 
 Github action to rollout on Bytebase.
